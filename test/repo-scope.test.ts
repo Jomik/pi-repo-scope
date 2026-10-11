@@ -113,7 +113,15 @@ describe("resolveRepoScope", () => {
     expect(resolveRepoScope(missing, base)).toEqual({ ...invalid(missing, "unreadable"), code: "ENOENT" });
     const file = join(temp, "file");
     fs.writeFileSync(file, "contents");
-    expect(resolveRepoScope(file, base)).toEqual(invalid(file));
+    expect(resolveRepoScope(file, base)).toEqual({ ...invalid(file, "malformed", file), stage: "input" });
+  });
+
+  it("retains the canonical target for a symlink-to-file cwd input failure", () => {
+    const target = join(temp, "target-file");
+    fs.writeFileSync(target, "contents");
+    const alias = join(temp, "file-alias");
+    fs.symlinkSync(target, alias, "file");
+    expect(resolveRepoScope(alias, base)).toEqual({ ...invalid(target, "malformed", target), stage: "input" });
   });
 
   it.each(["relative", "absolute"])("accepts %s gitdir line pointers with preserved spaces", (kind) => {
@@ -265,7 +273,8 @@ describe("resolveRepoScope", () => {
         }) as typeof fs.readdirSync,
       );
       expect(resolveRepoScope(root, base)).toEqual({
-        ...invalid(denied, "unreadable", denied === root ? undefined : root),
+        ...invalid(denied, "unreadable", root),
+        stage: denied === root ? "input" : "metadata",
         code: "EACCES",
       });
     }

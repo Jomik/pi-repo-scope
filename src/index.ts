@@ -82,8 +82,8 @@ export function resolveRepoScope(cwd: string, sharedConfigBase: string): RepoSco
   let canonicalInputDirectory: string | undefined;
   try {
     const canonical = canonicalize(cwd);
-    requireDirectory(canonical);
     canonicalInputDirectory = canonical;
+    requireDirectory(canonical);
     stage = "metadata";
     let directory = canonical;
     for (;;) {
