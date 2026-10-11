@@ -4,8 +4,8 @@ import {
   canonicalize,
   isDirectory,
   linePointer,
-  markerExists,
   MetadataError,
+  markerExists,
   readMetadata,
   requireDirectory,
 } from "./metadata.js";

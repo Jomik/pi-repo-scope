@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveRepoScope } from "../src/index.js";
 import { MetadataError, readMetadata } from "../src/metadata.js";
 
+vi.mock("node:fs", async (importOriginal) => ({
+  ...(await importOriginal<typeof fs>()),
+}));
+
 let temp: string;
 let base: string;
 
@@ -252,12 +256,10 @@ describe("resolveRepoScope", () => {
     const root = repository();
     const marker = join(root, ".jj");
     const original = fs.lstatSync;
-    vi.spyOn(fs, "lstatSync").mockImplementation(
-      ((path: fs.PathLike) => {
-        if (path === marker) throw Object.assign(new Error("denied"), { code: "EACCES" });
-        return original(path);
-      }) as typeof fs.lstatSync,
-    );
+    vi.spyOn(fs, "lstatSync").mockImplementation(((path: fs.PathLike) => {
+      if (path === marker) throw Object.assign(new Error("denied"), { code: "EACCES" });
+      return original(path);
+    }) as typeof fs.lstatSync);
     expect(resolveRepoScope(root, base)).toEqual({ ...invalid(marker, "unreadable", root), code: "EACCES" });
   });
 
@@ -266,12 +268,10 @@ describe("resolveRepoScope", () => {
     const original = fs.readdirSync;
     const spy = vi.spyOn(fs, "readdirSync");
     for (const denied of [root, join(root, ".git"), join(root, ".git", "objects"), join(root, ".git", "refs")]) {
-      spy.mockImplementation(
-        ((path: fs.PathLike) => {
-          if (path === denied) throw Object.assign(new Error("denied"), { code: "EACCES" });
-          return original(path);
-        }) as typeof fs.readdirSync,
-      );
+      spy.mockImplementation(((path: fs.PathLike) => {
+        if (path === denied) throw Object.assign(new Error("denied"), { code: "EACCES" });
+        return original(path);
+      }) as typeof fs.readdirSync);
       expect(resolveRepoScope(root, base)).toEqual({
         ...invalid(denied, "unreadable", root),
         stage: denied === root ? "input" : "metadata",
@@ -285,9 +285,10 @@ describe("shared jj storage", () => {
   it.each(["internal", "external", "colocated"])("resolves %s Git storage with the Git hash", (layout) => {
     const root = layout === "colocated" ? repository() : directory(join(temp, "work"));
     const repo = jjRepository(root);
-    const storage = layout === "colocated"
-      ? join(root, ".git")
-      : gitStorage(layout === "internal" ? join(repo, "store", "git") : join(temp, "external-git"));
+    const storage =
+      layout === "colocated"
+        ? join(root, ".git")
+        : gitStorage(layout === "internal" ? join(repo, "store", "git") : join(temp, "external-git"));
     fs.writeFileSync(join(repo, "store", "git_target"), relative(join(repo, "store"), storage));
     const nested = directory(join(root, "nested"));
     expect(resolveRepoScope(nested, base)).toEqual(expected(storage));
@@ -451,12 +452,10 @@ describe("shared jj storage", () => {
       repo,
       ...["store", "op_store", "op_heads", "index"].map((name) => join(repo, name)),
     ]) {
-      dirSpy.mockImplementation(
-        ((path: fs.PathLike) => {
-          if (path === denied) throw Object.assign(new Error("denied"), { code: "EACCES" });
-          return readdir(path);
-        }) as typeof fs.readdirSync,
-      );
+      dirSpy.mockImplementation(((path: fs.PathLike) => {
+        if (path === denied) throw Object.assign(new Error("denied"), { code: "EACCES" });
+        return readdir(path);
+      }) as typeof fs.readdirSync);
       expect(resolveRepoScope(root, base)).toEqual({ ...invalid(denied, "unreadable", root), code: "EACCES" });
     }
     dirSpy.mockRestore();
@@ -527,13 +526,11 @@ describe("bounded strict metadata reads", () => {
     const file = join(temp, "metadata");
     fs.writeFileSync(file, "text");
     const original = fs.fstatSync;
-    vi.spyOn(fs, "fstatSync").mockImplementation(
-      ((fd: number) => {
-        const stat = original(fd);
-        stat.isFile = () => false;
-        return stat;
-      }) as typeof fs.fstatSync,
-    );
+    vi.spyOn(fs, "fstatSync").mockImplementation(((fd: number) => {
+      const stat = original(fd);
+      stat.isFile = () => false;
+      return stat;
+    }) as typeof fs.fstatSync);
     const read = vi.spyOn(fs, "readSync");
     const close = vi.spyOn(fs, "closeSync");
     const open = vi.spyOn(fs, "openSync");
@@ -548,20 +545,16 @@ describe("bounded strict metadata reads", () => {
     fs.writeFileSync(file, "x".repeat(64 * 1024 + 1));
     const originalStat = fs.statSync;
     const originalFstat = fs.fstatSync;
-    vi.spyOn(fs, "statSync").mockImplementation(
-      ((path: fs.PathLike) => {
-        const stat = originalStat(path);
-        stat.size = 1;
-        return stat;
-      }) as typeof fs.statSync,
-    );
-    vi.spyOn(fs, "fstatSync").mockImplementation(
-      ((fd: number) => {
-        const stat = originalFstat(fd);
-        stat.size = 1;
-        return stat;
-      }) as typeof fs.fstatSync,
-    );
+    vi.spyOn(fs, "statSync").mockImplementation(((path: fs.PathLike) => {
+      const stat = originalStat(path);
+      stat.size = 1;
+      return stat;
+    }) as typeof fs.statSync);
+    vi.spyOn(fs, "fstatSync").mockImplementation(((fd: number) => {
+      const stat = originalFstat(fd);
+      stat.size = 1;
+      return stat;
+    }) as typeof fs.fstatSync);
     const close = vi.spyOn(fs, "closeSync");
     expect(() => readMetadata(file)).toThrowError(new MetadataError(file, "malformed"));
     expect(close).toHaveBeenCalledOnce();
@@ -582,12 +575,10 @@ describe("bounded strict metadata reads", () => {
 
   it("rejects undecodable canonical path bytes instead of hashing replacement characters", () => {
     const normal = fs.realpathSync;
-    vi.spyOn(fs, "realpathSync").mockImplementation(
-      ((path: fs.PathLike, options?: { encoding?: string } | string) => {
-        if (typeof options === "object" && options?.encoding === "buffer") return Buffer.from([0xff]);
-        return normal(path);
-      }) as typeof fs.realpathSync,
-    );
+    vi.spyOn(fs, "realpathSync").mockImplementation(((path: fs.PathLike, options?: { encoding?: string } | string) => {
+      if (typeof options === "object" && options?.encoding === "buffer") return Buffer.from([0xff]);
+      return normal(path);
+    }) as typeof fs.realpathSync);
     expect(resolveRepoScope(temp, base)).toEqual(invalid(temp));
   });
 });

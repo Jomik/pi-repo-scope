@@ -139,12 +139,16 @@ function secondary(primary: string, name: string, colocated = false): string {
 }
 
 describe.skipIf(Boolean(git.reason))(`released Git layouts (${gitLabel})`, () => {
-  it.each([false, true])("resolves main with committed=%s using Git's common-directory oracle", (committed) => {
-    const root = gitRepository("main", committed);
-    expect(run("git", ["symbolic-ref", "HEAD"], root)).toBe("refs/heads/main");
-    check(root, common(root));
-    check(directory(join(root, "nested", "deep")), common(root));
-  }, 120_000);
+  it.each([false, true])(
+    "resolves main with committed=%s using Git's common-directory oracle",
+    (committed) => {
+      const root = gitRepository("main", committed);
+      expect(run("git", ["symbolic-ref", "HEAD"], root)).toBe("refs/heads/main");
+      check(root, common(root));
+      check(directory(join(root, "nested", "deep")), common(root));
+    },
+    120_000,
+  );
 
   it("shares linked worktree identity and keeps local submodule storage distinct", () => {
     const root = gitRepository("main");
@@ -166,47 +170,55 @@ describe.skipIf(Boolean(git.reason))(`released Git layouts (${gitLabel})`, () =>
 });
 
 describe.skipIf(Boolean(git.reason || jj.reason))(`released jj Git layouts (${gitLabel}; ${jjLabel})`, () => {
-  it.each([false, true])("resolves internal Git storage with colocated=%s and shares identity", (colocated) => {
-    const root = join(temp, "primary");
-    run("jj", ["git", "init", ...(colocated ? ["--colocate"] : modernJj ? ["--no-colocate"] : []), root]);
-    const storage = colocated
-      ? common(root)
-      : run("git", [
-          "--git-dir",
-          join(root, ".jj", "repo", "store", "git"),
-          "rev-parse",
-          "--path-format=absolute",
-          "--git-common-dir",
-        ]);
-    const primary = check(root, storage);
-    expect(check(secondary(root, "secondary"), storage)).toEqual(primary);
-    if (colocated && modernJj) {
-      const work = secondary(root, "colocated-secondary", true);
-      expect(fs.existsSync(join(work, ".git"))).toBe(true);
-      expect(check(work, common(work))).toEqual(primary);
-    }
-  }, 120_000);
+  it.each([false, true])(
+    "resolves internal Git storage with colocated=%s and shares identity",
+    (colocated) => {
+      const root = join(temp, "primary");
+      run("jj", ["git", "init", ...(colocated ? ["--colocate"] : modernJj ? ["--no-colocate"] : []), root]);
+      const storage = colocated
+        ? common(root)
+        : run("git", [
+            "--git-dir",
+            join(root, ".jj", "repo", "store", "git"),
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+          ]);
+      const primary = check(root, storage);
+      expect(check(secondary(root, "secondary"), storage)).toEqual(primary);
+      if (colocated && modernJj) {
+        const work = secondary(root, "colocated-secondary", true);
+        expect(fs.existsSync(join(work, ".git"))).toBe(true);
+        expect(check(work, common(work))).toEqual(primary);
+      }
+    },
+    120_000,
+  );
 
-  it.each([false, true])("resolves external absolute Git storage with bare=%s", (bare) => {
-    const gitRoot = bare ? join(temp, "bare.git") : gitRepository("ordinary");
-    if (bare) run("git", ["init", "--bare", "--initial-branch=main", gitRoot]);
-    const storage = common(gitRoot);
-    const root = join(temp, "jj-external");
-    run("jj", ["git", "init", "--git-repo", fs.realpathSync(storage), root]);
-    const primary = check(root, storage);
-    expect(check(secondary(root, "secondary"), storage)).toEqual(primary);
-    if (bare) {
-      expect(resolveRepoScope(gitRoot, base)).toEqual({
-        status: "none",
-        canonicalInputDirectory: fs.realpathSync(gitRoot),
-      });
-    } else {
-      const linked = join(temp, "linked");
-      run("git", ["worktree", "add", "-b", "linked", linked], gitRoot);
-      expect(check(gitRoot, storage)).toEqual(primary);
-      expect(check(linked, common(linked))).toEqual(primary);
-    }
-  }, 120_000);
+  it.each([false, true])(
+    "resolves external absolute Git storage with bare=%s",
+    (bare) => {
+      const gitRoot = bare ? join(temp, "bare.git") : gitRepository("ordinary");
+      if (bare) run("git", ["init", "--bare", "--initial-branch=main", gitRoot]);
+      const storage = common(gitRoot);
+      const root = join(temp, "jj-external");
+      run("jj", ["git", "init", "--git-repo", fs.realpathSync(storage), root]);
+      const primary = check(root, storage);
+      expect(check(secondary(root, "secondary"), storage)).toEqual(primary);
+      if (bare) {
+        expect(resolveRepoScope(gitRoot, base)).toEqual({
+          status: "none",
+          canonicalInputDirectory: fs.realpathSync(gitRoot),
+        });
+      } else {
+        const linked = join(temp, "linked");
+        run("git", ["worktree", "add", "-b", "linked", linked], gitRoot);
+        expect(check(gitRoot, storage)).toEqual(primary);
+        expect(check(linked, common(linked))).toEqual(primary);
+      }
+    },
+    120_000,
+  );
 });
 
 describe.skipIf(Boolean(jj.reason))(`released native jj layouts (${jjLabel})`, () => {
