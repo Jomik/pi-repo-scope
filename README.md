@@ -88,19 +88,18 @@ Repository keys and storage paths can change; consumers own any mapping, migrati
 
 ## Development and planned verification
 
-Use Node 24 (`.node-version`) and npm 11.12.1 (`packageManager`). Initial dependency setup is manual:
+Use Node 24 (`.node-version`) and npm 11.12.1 (`packageManager`). Install from the committed lockfile:
 
 ```sh
-npm install
-# Review and commit the generated package-lock.json before relying on CI.
+npm ci
 npm run lint
 npm run typecheck
 npm test
 npm run build
 ```
 
-There is currently no committed lockfile. `npm install` generates it; `npm ci` requires that committed lockfile
-and will fail until it exists. No dependency installation or workflow execution has been performed.
+The committed `package-lock.json` makes dependency installation reproducible. Workflow execution remains
+unverified; the full local test suite is pending final validation.
 
 The prepared CI runs on pushes to `main` and pull requests. Its Ubuntu check uses `npm ci`, lint, typecheck,
 test, and build. A separate **planned, not locally passed** compatibility matrix covers Ubuntu Linux and
@@ -139,7 +138,7 @@ The package exports only the resolver ESM entry and its types; the file allowlis
 
 Before publishing:
 
-1. Generate, review, and commit the lockfile; obtain a successful CI run.
+1. Obtain a successful CI run, including the required compatibility matrix.
 2. Configure the actual GitHub remote/repository and set the real repository URL in package repository metadata.
    No remote is currently configured; no GitHub URL or author is invented.
 3. Choose the license and set accurate package license metadata and the appropriate license text.
