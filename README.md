@@ -98,8 +98,9 @@ npm test
 npm run build
 ```
 
-The committed `package-lock.json` makes dependency installation reproducible. Workflow execution remains
-unverified; the full local test suite is pending final validation.
+The committed `package-lock.json` makes dependency installation reproducible. Local lint, typecheck, and
+build passed; 82 tests passed and 9 pinned Git/jj tests were skipped. CI and the required compatibility
+matrix have not been run.
 
 The prepared CI runs on pushes to `main` and pull requests. Its Ubuntu check uses `npm ci`, lint, typecheck,
 test, and build. A separate **planned, not locally passed** compatibility matrix covers Ubuntu Linux and
