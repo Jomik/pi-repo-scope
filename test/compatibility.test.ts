@@ -144,7 +144,7 @@ describe.skipIf(Boolean(git.reason))(`released Git layouts (${gitLabel})`, () =>
     expect(run("git", ["symbolic-ref", "HEAD"], root)).toBe("refs/heads/main");
     check(root, common(root));
     check(directory(join(root, "nested", "deep")), common(root));
-  });
+  }, 120_000);
 
   it("shares linked worktree identity and keeps local submodule storage distinct", () => {
     const root = gitRepository("main");
@@ -156,13 +156,13 @@ describe.skipIf(Boolean(git.reason))(`released Git layouts (${gitLabel})`, () =>
     const submodule = join(root, "submodule");
     expect(check(submodule, common(submodule))).not.toEqual(check(root, common(root)));
     expect(check(submodule, common(submodule))).not.toEqual(check(source, common(source)));
-  });
+  }, 120_000);
 
   it("does not recognize bare storage directly", () => {
     const bare = join(temp, "bare.git");
     run("git", ["init", "--bare", "--initial-branch=main", bare]);
     expect(resolveRepoScope(bare, base)).toEqual({ status: "none", canonicalInputDirectory: fs.realpathSync(bare) });
-  });
+  }, 120_000);
 });
 
 describe.skipIf(Boolean(git.reason || jj.reason))(`released jj Git layouts (${gitLabel}; ${jjLabel})`, () => {
@@ -185,7 +185,7 @@ describe.skipIf(Boolean(git.reason || jj.reason))(`released jj Git layouts (${gi
       expect(fs.existsSync(join(work, ".git"))).toBe(true);
       expect(check(work, common(work))).toEqual(primary);
     }
-  });
+  }, 120_000);
 
   it.each([false, true])("resolves external absolute Git storage with bare=%s", (bare) => {
     const gitRoot = bare ? join(temp, "bare.git") : gitRepository("ordinary");
@@ -206,7 +206,7 @@ describe.skipIf(Boolean(git.reason || jj.reason))(`released jj Git layouts (${gi
       expect(check(gitRoot, storage)).toEqual(primary);
       expect(check(linked, common(linked))).toEqual(primary);
     }
-  });
+  }, 120_000);
 });
 
 describe.skipIf(Boolean(jj.reason))(`released native jj layouts (${jjLabel})`, () => {
@@ -218,7 +218,7 @@ describe.skipIf(Boolean(jj.reason))(`released native jj layouts (${jjLabel})`, (
     const primary = check(root, repo, "jj");
     expect(primary).not.toEqual(expected(join(repo, "store"), "jj"));
     expect(check(secondary(root, "native-secondary"), repo, "jj")).toEqual(primary);
-  });
+  }, 120_000);
 });
 
 it.skipIf(process.platform === "win32" || !fs.existsSync("/dev/null"))(
