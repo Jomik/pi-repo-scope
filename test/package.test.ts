@@ -67,7 +67,7 @@ describe("standalone package scaffold", () => {
     expect(biome.files.includes).toEqual(["**", "!!**/dist", "!!**/node_modules", "!!**/.pi"]);
     expect(biome.formatter).toMatchObject({ indentStyle: "space", indentWidth: 2, lineWidth: 120 });
     expect(biome.javascript.formatter.quoteStyle).toBe("double");
-    expect(biome.linter.rules.recommended).toBe(true);
+    expect(biome.linter.rules).toEqual({ preset: "recommended" });
     expect(biome.assist.actions.source.organizeImports).toBe("on");
     expect(readFileSync(new URL("../.gitignore", import.meta.url), "utf8").split("\n")).toEqual([
       "/dist/",
