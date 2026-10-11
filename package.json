@@ -1,0 +1,31 @@
+{
+  "name": "pi-repo-scope",
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "npm@11.12.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/node": "^24.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11"
+  }
+}
