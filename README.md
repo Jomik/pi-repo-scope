@@ -54,6 +54,12 @@ The path is Node's realpath spelling, not a remote URL, content hash, repository
   Both lowercase `simple` and the released `Simple` backend alias are accepted. Released CLI fixtures
   assert the actual bytes are exactly `Simple`, with no newline; backend type files are not trimmed.
 
+Supported layouts are checked structurally: Git requires `HEAD` containing `ref: refs/...` or a 40/64-digit
+hex object ID, plus readable `objects` and `refs` directories in common storage. jj requires readable
+`store`, `op_store`, `op_heads`, and `index` directories, each with a raw, nonempty `type` token containing
+no whitespace or NUL. Only commit-store backends `git`, `simple`, and the actual released `Simple` are supported.
+No newer workspace metadata is required, and the resolver does not upgrade repositories.
+
 Moving canonical storage changes its key. Moving a checkout while preserving the same storage path does not.
 Symlink aliases resolving to the same storage share a key. This is filesystem identity, not portable identity.
 
@@ -67,13 +73,17 @@ Resolution is a metadata snapshot, **not authorization**. Repository pointers ar
 reads to other accessible storage; hashing does not establish trust, ownership, or permission to load config.
 Filesystem changes can race resolution. Consumers own validation, grant policies, and safe use of returned paths.
 
-Metadata reads require regular files, enforce a 64 KiB limit, and decode strict UTF-8. Canonical paths must also
-round-trip as UTF-8. The supported platform scope is macOS/Linux with UTF-8 paths; Windows and arbitrary
-non-UTF-8 filesystem names are not claimed. No Git or jj subprocess is used by the resolver itself.
+Metadata reads allow symlinks to regular files, but reject FIFOs, devices, and other non-regular files as
+`malformed`. Reads enforce a maximum of 64 KiB and strict UTF-8 decoding; a BOM is preserved, not stripped.
+Oversized or undecodable metadata is also `malformed`. Canonical paths must round-trip as UTF-8.
+The supported platform scope is macOS/Linux with UTF-8 paths; Windows and arbitrary non-UTF-8 filesystem
+names are not claimed. No Git or jj subprocess is used by the resolver itself.
 All filesystem work is synchronous: slow disks, network mounts, or hostile filesystem I/O can block the caller;
 there is no timeout or asynchronous isolation.
 
-Consumer adoption is intentionally not included. There is no migration of existing config or grants.
+Consumer adoption is intentionally not included. Stricter rejection of unknown commit-store types and special,
+oversized, or undecodable metadata may reject previously accepted Armory layouts or change adapter fallback
+keys at adoption. The resolver itself provides no fallback or migration of existing config or grants.
 Repository keys and storage paths can change; consumers own any mapping, migration, and authorization policy.
 
 ## Development and planned verification
@@ -90,7 +100,7 @@ npm run build
 ```
 
 There is currently no committed lockfile. `npm install` generates it; `npm ci` requires that committed lockfile
-and will fail until it exists. No dependency install or workflow execution is claimed by this delivery patch.
+and will fail until it exists. No dependency installation or workflow execution has been performed.
 
 The prepared CI runs on pushes to `main` and pull requests. Its Ubuntu check uses `npm ci`, lint, typecheck,
 test, and build. A separate **planned, not locally passed** compatibility matrix covers Ubuntu Linux and
@@ -120,18 +130,18 @@ until the prepared workflow actually runs successfully.
 
 ## Delivery prerequisites
 
-The release workflow is **prepared only**, not activated or verified by this patch. A `main` push runs
-release-please v5 for the root Node package, starting from manifest version 0.1.0, with minor bumps before 1.0
-and no component prefix in tags. Only `release_created == 'true'` enables the publisher, which runs
-`npm ci`, build, and `npm publish --provenance --access public` with npm's registry and OIDC permissions.
+The prepared CI and release workflows run automatically when pushed to `main` on the configured GitHub
+repository; no manual activation is required. Neither workflow has been executed or verified yet.
+A `main` push runs release-please v5 for the root Node package, starting from manifest version 0.1.0,
+with minor bumps before 1.0 and no component prefix in tags. Only `release_created == 'true'` enables the
+publisher, which runs `npm ci`, build, and `npm publish --provenance --access public` with npm's registry and OIDC permissions.
 The package exports only the resolver ESM entry and its types; the file allowlist is `dist`, and prepack builds it.
 
 Before publishing:
 
 1. Generate, review, and commit the lockfile; obtain a successful CI run.
-2. Configure the actual GitHub remote/repository and accurate package repository metadata.
-   No Git remotes are configured according to the caller's parent checkout verification; no GitHub URL or author
-   is invented here.
+2. Configure the actual GitHub remote/repository and set the real repository URL in package repository metadata.
+   No remote is currently configured; no GitHub URL or author is invented.
 3. Choose the license and set accurate package license metadata and the appropriate license text.
    No license has been chosen or `LICENSE` added. Repository and license metadata **must be set before publishing**.
 4. Manually configure an npm trusted publisher for the actual GitHub owner, repository, and `release.yml`
