@@ -9,7 +9,7 @@ function readJson(path: string) {
 const packageJson = readJson("../package.json");
 
 describe("standalone package scaffold", () => {
-  it("publishes only the built ESM boundary without a resolver API or runtime dependencies", () => {
+  it("publishes only the built ESM boundary with the resolver API and no runtime dependencies", () => {
     expect(packageJson.name).toBe("pi-repo-scope");
     expect(packageJson.version).toBe("0.1.0");
     expect(packageJson.type).toBe("module");
@@ -20,7 +20,7 @@ describe("standalone package scaffold", () => {
     expect(packageJson.dependencies ?? {}).toEqual({});
     expect(packageJson.peerDependencies ?? {}).toEqual({});
     expect(packageJson.pi).toBeUndefined();
-    expect(Object.keys(entry)).toEqual([]);
+    expect(Object.keys(entry)).toEqual(["resolveRepoScope"]);
   });
 
   it("uses the specified Node and development tooling", () => {
