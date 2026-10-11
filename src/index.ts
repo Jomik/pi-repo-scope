@@ -41,6 +41,35 @@ function gitStorage(marker: string): string {
   return common;
 }
 
+function rawPointer(path: string): string {
+  const value = readMetadata(path);
+  if (!value || value.includes("\0")) throw new MetadataError(path, "malformed");
+  return value;
+}
+
+function jjStorage(marker: string): { kind: "git" | "jj"; path: string } {
+  requireDirectory(marker);
+  const repoMarker = join(marker, "repo");
+  const repo = canonicalize(isDirectory(repoMarker) ? repoMarker : resolve(marker, rawPointer(repoMarker)));
+  requireDirectory(repo);
+  let backend = "";
+  for (const component of ["store", "op_store", "op_heads", "index"]) {
+    const directory = join(repo, component);
+    requireDirectory(directory);
+    const typePath = join(directory, "type");
+    const type = readMetadata(typePath);
+    if (!type || /[\s\0]/.test(type)) throw new MetadataError(typePath, "malformed");
+    if (component === "store") backend = type;
+  }
+  if (backend === "git") {
+    const store = join(repo, "store");
+    return { kind: "git", path: gitStorage(resolve(store, rawPointer(join(store, "git_target")))) };
+  }
+  // Released jj backends use "Simple"; retain the exact lowercase layout too.
+  if (backend === "simple" || backend === "Simple") return { kind: "jj", path: repo };
+  throw new MetadataError(join(repo, "store", "type"), "unsupported");
+}
+
 /** Resolve physical repository ancestry without creating or inspecting shared config storage. */
 export function resolveRepoScope(cwd: string, sharedConfigBase: string): RepoScope {
   for (const input of [cwd, sharedConfigBase]) {
@@ -59,11 +88,14 @@ export function resolveRepoScope(cwd: string, sharedConfigBase: string): RepoSco
     let directory = canonical;
     for (;;) {
       const jj = join(directory, ".jj");
-      if (markerExists(jj)) throw new MetadataError(jj, "unsupported");
       const git = join(directory, ".git");
-      if (markerExists(git)) {
-        const storage = gitStorage(git);
-        const identity = createHash("sha256").update(`git\0${storage}`, "utf8").digest("hex");
+      const storage = markerExists(jj)
+        ? jjStorage(jj)
+        : markerExists(git)
+          ? { kind: "git", path: gitStorage(git) }
+          : undefined;
+      if (storage) {
+        const identity = createHash("sha256").update(`${storage.kind}\0${storage.path}`, "utf8").digest("hex");
         return { status: "found", identity, configDir: join(base, identity) };
       }
       const parent = dirname(directory);

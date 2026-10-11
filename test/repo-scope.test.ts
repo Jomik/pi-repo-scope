@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveRepoScope } from "../src/index.js";
 import { MetadataError, readMetadata } from "../src/metadata.js";
@@ -37,10 +37,22 @@ function repository(name = "repo", head?: string): string {
   return root;
 }
 
-function expected(storage: string) {
-  // Independent byte construction of the git + NUL + canonical-path hash vector.
+function jjRepository(root: string, backend = "git", repo = join(root, ".jj", "repo")): string {
+  directory(join(root, ".jj"));
+  for (const component of ["store", "op_store", "op_heads", "index"]) {
+    directory(join(repo, component));
+    fs.writeFileSync(join(repo, component, "type"), component === "store" ? backend : "other-token");
+  }
+  if (repo !== join(root, ".jj", "repo")) {
+    fs.writeFileSync(join(root, ".jj", "repo"), relative(join(root, ".jj"), repo));
+  }
+  return repo;
+}
+
+function expected(storage: string, kind = "git") {
+  // Independent byte construction of the storage-kind + NUL + canonical-path hash vector.
   const identity = createHash("sha256")
-    .update(Buffer.concat([Buffer.from("git"), Buffer.from([0]), Buffer.from(fs.realpathSync(storage), "utf8")]))
+    .update(Buffer.concat([Buffer.from(kind), Buffer.from([0]), Buffer.from(fs.realpathSync(storage), "utf8")]))
     .digest("hex");
   return { status: "found", identity, configDir: join(resolve(base), identity) };
 }
@@ -166,14 +178,21 @@ describe("resolveRepoScope", () => {
     if (kind === "directory") directory(marker);
     else if (kind === "file") fs.writeFileSync(marker, "not supported yet");
     else fs.symlinkSync(join(temp, "missing"), marker);
-    expect(resolveRepoScope(root, base)).toEqual(invalid(marker, "unsupported", root));
+    const result =
+      kind === "file"
+        ? invalid(marker, "malformed", root)
+        : { ...invalid(kind === "directory" ? join(marker, "repo") : marker, "unreadable", root), code: "ENOENT" };
+    expect(resolveRepoScope(root, base)).toEqual(result);
   });
 
   it("stops at nested jj instead of an ancestor Git repository", () => {
     const root = repository();
     const nested = directory(join(root, "nested"));
     directory(join(nested, ".jj"));
-    expect(resolveRepoScope(nested, base)).toEqual(invalid(join(nested, ".jj"), "unsupported", nested));
+    expect(resolveRepoScope(nested, base)).toEqual({
+      ...invalid(join(nested, ".jj", "repo"), "unreadable", nested),
+      code: "ENOENT",
+    });
   });
 
   it.each([
@@ -253,6 +272,200 @@ describe("resolveRepoScope", () => {
   });
 });
 
+describe("shared jj storage", () => {
+  it.each(["internal", "external", "colocated"])("resolves %s Git storage with the Git hash", (layout) => {
+    const root = layout === "colocated" ? repository() : directory(join(temp, "work"));
+    const repo = jjRepository(root);
+    const storage = layout === "colocated"
+      ? join(root, ".git")
+      : gitStorage(layout === "internal" ? join(repo, "store", "git") : join(temp, "external-git"));
+    fs.writeFileSync(join(repo, "store", "git_target"), relative(join(repo, "store"), storage));
+    const nested = directory(join(root, "nested"));
+    expect(resolveRepoScope(nested, base)).toEqual(expected(storage));
+    expect(fs.existsSync(dirname(base))).toBe(false);
+  });
+
+  it.each(["relative", "absolute"])("preserves raw %s repo and git_target whitespace/newlines", (kind) => {
+    const root = directory(join(temp, "primary"));
+    const repo = jjRepository(root, "git", join(temp, " shared\nrepo\n"));
+    const storage = gitStorage(join(temp, " git\ntarget\n "));
+    fs.writeFileSync(
+      join(repo, "store", "git_target"),
+      kind === "relative" ? relative(join(repo, "store"), storage) : storage,
+    );
+    fs.writeFileSync(join(root, ".jj", "repo"), kind === "relative" ? relative(join(root, ".jj"), repo) : repo);
+    const secondary = directory(join(temp, "secondary"));
+    directory(join(secondary, ".jj"));
+    fs.writeFileSync(
+      join(secondary, ".jj", "repo"),
+      kind === "relative" ? relative(join(secondary, ".jj"), repo) : repo,
+    );
+    expect(resolveRepoScope(root, base)).toEqual(expected(storage));
+    expect(resolveRepoScope(secondary, base)).toEqual(expected(storage));
+  });
+
+  it.each(["directory", "gitfile"])("reuses private Git commondir through a %s target", (kind) => {
+    const root = repository();
+    const common = join(root, ".git");
+    const privateDir = directory(join(common, "worktrees", "jj"));
+    fs.writeFileSync(join(privateDir, "HEAD"), "ref: refs/heads/jj\n");
+    fs.writeFileSync(join(privateDir, "commondir"), "../..\n");
+    const work = directory(join(temp, "jj-work"));
+    const repo = jjRepository(work);
+    let target = privateDir;
+    if (kind === "gitfile") {
+      target = join(repo, "store", "gitfile");
+      fs.writeFileSync(target, `gitdir: ${relative(dirname(target), privateDir)}\n`);
+    }
+    fs.writeFileSync(join(repo, "store", "git_target"), target);
+    expect(resolveRepoScope(work, base)).toEqual(expected(common));
+    expect(resolveRepoScope(work, base)).toEqual(resolveRepoScope(root, base));
+  });
+
+  it.each(["simple", "Simple"])("hashes the whole canonical repo for %s, not its store", (backend) => {
+    const root = directory(join(temp, "primary"));
+    const repo = jjRepository(root, backend);
+    expect(resolveRepoScope(root, base)).toEqual(expected(repo, "jj"));
+    expect(resolveRepoScope(root, base)).not.toEqual(expected(join(repo, "store"), "jj"));
+    expect(resolveRepoScope(root, base)).not.toEqual(expected(repo, backend));
+    const work = directory(join(temp, "secondary"));
+    directory(join(work, ".jj"));
+    const alias = join(temp, "repo-alias");
+    fs.symlinkSync(repo, alias, "dir");
+    fs.writeFileSync(join(work, ".jj", "repo"), alias);
+    expect(resolveRepoScope(work, base)).toEqual(expected(repo, "jj"));
+    const clone = directory(join(temp, "clone"));
+    const cloneRepo = jjRepository(clone, backend);
+    // Even sharing the store is insufficient: the whole repository owns identity.
+    fs.rmSync(join(cloneRepo, "store"), { recursive: true });
+    fs.symlinkSync(join(repo, "store"), join(cloneRepo, "store"), "dir");
+    expect(resolveRepoScope(clone, base)).toEqual(expected(cloneRepo, "jj"));
+    expect(resolveRepoScope(clone, base)).not.toEqual(resolveRepoScope(root, base));
+  });
+
+  it("groups Git target aliases but keeps independent clones separate", () => {
+    const root = directory(join(temp, "work"));
+    const repo = jjRepository(root);
+    const storage = gitStorage(join(temp, "git-storage"));
+    const alias = join(temp, "git-alias");
+    fs.symlinkSync(storage, alias, "dir");
+    const target = join(repo, "store", "git_target");
+    fs.writeFileSync(target, alias);
+    expect(resolveRepoScope(root, base)).toEqual(expected(storage));
+    const clone = gitStorage(join(temp, "clone-storage"));
+    fs.writeFileSync(target, clone);
+    expect(resolveRepoScope(root, base)).toEqual(expected(clone));
+    expect(resolveRepoScope(root, base)).not.toEqual(expected(storage));
+  });
+
+  it.each(["store", "op_store", "op_heads", "index"])("requires a readable %s directory and type", (component) => {
+    const root = repository();
+    const repo = jjRepository(root, "simple");
+    const dir = join(repo, component);
+    const type = join(dir, "type");
+    fs.unlinkSync(type);
+    expect(resolveRepoScope(root, base)).toEqual({ ...invalid(type, "unreadable", root), code: "ENOENT" });
+    directory(type);
+    expect(resolveRepoScope(root, base)).toEqual(invalid(type, "malformed", root));
+    fs.rmdirSync(type);
+    fs.rmdirSync(dir);
+    expect(resolveRepoScope(root, base)).toEqual({ ...invalid(dir, "unreadable", root), code: "ENOENT" });
+    fs.writeFileSync(dir, "file");
+    expect(resolveRepoScope(root, base)).toEqual(invalid(dir, "malformed", root));
+  });
+
+  it.each(["", "git\n", "git ", "git\0", "git\t", "x".repeat(64 * 1024 + 1), Buffer.from([0xff])])(
+    "rejects malformed type metadata: %s",
+    (value) => {
+      const root = repository();
+      const repo = jjRepository(root, "simple");
+      for (const component of ["store", "op_store", "op_heads", "index"]) {
+        const type = join(repo, component, "type");
+        fs.writeFileSync(type, value);
+        expect(resolveRepoScope(root, base)).toEqual(invalid(type, "malformed", root));
+        fs.writeFileSync(type, component === "store" ? "simple" : "other-token");
+      }
+    },
+  );
+
+  it.each(["custom", "SIMPLE", "Git"])("stops at unsupported commit backend %s without fallback", (backend) => {
+    const parent = repository();
+    const root = directory(join(parent, "nested"));
+    gitStorage(join(root, ".git"));
+    const repo = jjRepository(root, backend);
+    expect(resolveRepoScope(root, base)).toEqual(invalid(join(repo, "store", "type"), "unsupported", root));
+  });
+
+  it.each(["repo", "git_target"])("rejects malformed raw %s pointers without fallback", (pointer) => {
+    const root = repository();
+    const repo = jjRepository(root, "git", join(temp, "shared"));
+    const path = pointer === "repo" ? join(root, ".jj", "repo") : join(repo, "store", "git_target");
+    for (const value of ["", "target\0", "x".repeat(64 * 1024 + 1), Buffer.from([0xff])]) {
+      fs.writeFileSync(path, value);
+      expect(resolveRepoScope(root, base)).toEqual(invalid(path, "malformed", root));
+    }
+    fs.writeFileSync(path, "missing");
+    const missing = resolve(pointer === "repo" ? join(root, ".jj") : join(repo, "store"), "missing");
+    expect(resolveRepoScope(root, base)).toEqual({ ...invalid(missing, "unreadable", root), code: "ENOENT" });
+    fs.unlinkSync(path);
+    expect(resolveRepoScope(root, base)).toEqual({ ...invalid(path, "unreadable", root), code: "ENOENT" });
+    fs.symlinkSync(join(temp, "broken-target"), path);
+    expect(resolveRepoScope(root, base)).toEqual({ ...invalid(path, "unreadable", root), code: "ENOENT" });
+    fs.unlinkSync(path);
+    directory(path);
+    expect(resolveRepoScope(root, base)).toEqual(
+      pointer === "git_target"
+        ? invalid(path, "malformed", root)
+        : { ...invalid(join(path, "store"), "unreadable", root), code: "ENOENT" },
+    );
+  });
+
+  it("requires the shared repo to be a readable directory", () => {
+    const root = repository();
+    directory(join(root, ".jj"));
+    const target = join(temp, "repo-file");
+    fs.writeFileSync(target, "contents");
+    fs.writeFileSync(join(root, ".jj", "repo"), target);
+    expect(resolveRepoScope(root, base)).toEqual(invalid(target, "malformed", root));
+  });
+
+  it("reports injected unreadable jj directories and files at their exact paths", () => {
+    const root = repository();
+    const repo = jjRepository(root, "git", join(temp, "shared"));
+    const storage = gitStorage(join(repo, "store", "git"));
+    fs.writeFileSync(join(repo, "store", "git_target"), storage);
+    const readdir = fs.readdirSync;
+    const open = fs.openSync;
+    const dirSpy = vi.spyOn(fs, "readdirSync");
+    for (const denied of [
+      join(root, ".jj"),
+      repo,
+      ...["store", "op_store", "op_heads", "index"].map((name) => join(repo, name)),
+    ]) {
+      dirSpy.mockImplementation(
+        ((path: fs.PathLike) => {
+          if (path === denied) throw Object.assign(new Error("denied"), { code: "EACCES" });
+          return readdir(path);
+        }) as typeof fs.readdirSync,
+      );
+      expect(resolveRepoScope(root, base)).toEqual({ ...invalid(denied, "unreadable", root), code: "EACCES" });
+    }
+    dirSpy.mockRestore();
+    const openSpy = vi.spyOn(fs, "openSync");
+    for (const denied of [
+      join(root, ".jj", "repo"),
+      join(repo, "store", "git_target"),
+      ...["store", "op_store", "op_heads", "index"].map((name) => join(repo, name, "type")),
+    ]) {
+      openSpy.mockImplementation((path, flags, mode) => {
+        if (path === denied) throw Object.assign(new Error("denied"), { code: "EACCES" });
+        return open(path, flags, mode);
+      });
+      expect(resolveRepoScope(root, base)).toEqual({ ...invalid(denied, "unreadable", root), code: "EACCES" });
+    }
+  });
+});
+
 describe("bounded strict metadata reads", () => {
   it("accepts exactly 64KiB, rejects 64KiB+1, and preserves BOM", () => {
     const file = join(temp, "metadata");
@@ -291,6 +504,14 @@ describe("bounded strict metadata reads", () => {
     fs.writeFileSync(target, "text");
     fs.symlinkSync(target, file);
     expect(readMetadata(file)).toBe("text");
+  });
+
+  it.skipIf(process.platform === "win32")("rejects device symlink targets without opening them", () => {
+    const file = join(temp, "device");
+    fs.symlinkSync("/dev/null", file);
+    const open = vi.spyOn(fs, "openSync");
+    expect(() => readMetadata(file)).toThrowError(new MetadataError(file, "malformed"));
+    expect(open).not.toHaveBeenCalled();
   });
 
   it("checks the opened descriptor before reading and always closes it", () => {
@@ -339,7 +560,12 @@ describe("bounded strict metadata reads", () => {
 
   it.skipIf(process.platform === "win32")("rejects physical directory names containing non-UTF8 bytes", () => {
     const target = Buffer.concat([Buffer.from(`${temp}/`), Buffer.from([0xff])]);
-    fs.mkdirSync(target);
+    try {
+      fs.mkdirSync(target);
+    } catch (error) {
+      if (process.platform === "darwin" && (error as NodeJS.ErrnoException).code === "EILSEQ") return;
+      throw error;
+    }
     const alias = join(temp, "invalid-byte-alias");
     fs.symlinkSync(target, alias);
     expect(resolveRepoScope(alias, base)).toEqual(invalid(alias));
