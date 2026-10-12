@@ -50,6 +50,7 @@ jobs:
           source="$RUNNER_TEMP/repo-scope-git-source"
           mkdir -p "$tools/bin" "$source"
           curl --fail --location --proto '=https' --tlsv1.2 \
+            --retry 3 --retry-delay 2 --retry-max-time 60 \
             https://www.kernel.org/pub/software/scm/git/git-2.49.0.tar.gz \
             --output "$source/git.tar.gz"
           tar -xzf "$source/git.tar.gz" -C "$source"
@@ -75,6 +76,7 @@ jobs:
             NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_CURL=YesPlease \
             NO_EXPAT=YesPlease NO_OPENSSL=YesPlease
           curl --fail --location --proto '=https' --tlsv1.2 \
+            --retry 3 --retry-delay 2 --retry-max-time 60 \
             "https://github.com/jj-vcs/jj/releases/download/v${REPO_SCOPE_JJ_VERSION}/jj-v${REPO_SCOPE_JJ_VERSION}-${target}.tar.gz" \
             --output "$RUNNER_TEMP/jj.tar.gz"
           tar -xzf "$RUNNER_TEMP/jj.tar.gz" -C "$tools/bin"
