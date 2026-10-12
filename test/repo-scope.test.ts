@@ -570,7 +570,10 @@ describe("bounded strict metadata reads", () => {
     }
     const alias = join(temp, "invalid-byte-alias");
     fs.symlinkSync(target, alias);
-    expect(resolveRepoScope(alias, base)).toEqual(invalid(alias));
+    // Node's JS realpath may yield ENOENT before UTF8 decoding can report malformed bytes.
+    expect([invalid(alias), { ...invalid(alias, "unreadable"), code: "ENOENT" }]).toContainEqual(
+      resolveRepoScope(alias, base),
+    );
   });
 
   it("rejects undecodable canonical path bytes instead of hashing replacement characters", () => {
