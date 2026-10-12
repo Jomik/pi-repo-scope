@@ -130,11 +130,13 @@ until the prepared workflow actually runs successfully.
 
 ## Delivery prerequisites
 
-The prepared CI and release workflows run automatically when pushed to `main` on the configured GitHub
-repository; no manual activation is required. Neither workflow has been executed or verified yet.
-A `main` push runs release-please v5 for the root Node package, starting from manifest version 0.1.0,
-with minor bumps before 1.0 and no component prefix in tags. Only `release_created == 'true'` enables the
-publisher, which runs `npm ci`, build, and `npm publish --provenance --access public` with npm's registry and OIDC permissions.
+Once the GitHub repository and remote are configured, pushing `main` triggers the prepared CI and release
+workflows automatically; CI also runs on pull requests. No manual workflow activation is required.
+Neither workflow has been executed or verified yet.
+A `main` push runs release-please v5 to open or update a release PR for the root Node package, starting from
+manifest version 0.1.0, with minor bumps before 1.0 and no component prefix in tags. Merging the release PR
+creates a release. Only `release_created == 'true'` enables the publisher, which runs `npm ci`, build, and
+`npm publish --provenance --access public` with npm's registry and OIDC permissions.
 The package exports only the resolver ESM entry and its types; the file allowlist is `dist`, and prepack builds it.
 npm includes `README.md` and `LICENSE` automatically. The package is MIT licensed; see [LICENSE](LICENSE).
 The confirmed repository URL is https://github.com/Jomik/pi-repo-scope and is recorded in package metadata;
@@ -156,5 +158,7 @@ Before publishing:
 4. After the initial publish, manually configure the npm GitHub trusted publisher with owner `Jomik`,
    repository `pi-repo-scope`, and workflow `release.yml`. This trust is not configured by the workflow
    and is not yet verified. Future releases use release-please and the OIDC publisher described above.
+   Complete trusted-publisher setup before merging any automated release PR; a created release triggers
+   the publisher, which otherwise fails authentication.
 
 No consumer integration, migration, push, release, or npm publication has been performed.
