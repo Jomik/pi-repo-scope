@@ -136,15 +136,25 @@ A `main` push runs release-please v5 for the root Node package, starting from ma
 with minor bumps before 1.0 and no component prefix in tags. Only `release_created == 'true'` enables the
 publisher, which runs `npm ci`, build, and `npm publish --provenance --access public` with npm's registry and OIDC permissions.
 The package exports only the resolver ESM entry and its types; the file allowlist is `dist`, and prepack builds it.
+npm includes `README.md` and `LICENSE` automatically. The package is MIT licensed; see [LICENSE](LICENSE).
+The confirmed repository URL is https://github.com/Jomik/pi-repo-scope and is recorded in package metadata;
+this does not verify that the GitHub repository exists or that a remote is configured.
 
 Before publishing:
 
 1. Obtain a successful CI run, including the required compatibility matrix.
-2. Configure the actual GitHub remote/repository and set the real repository URL in package repository metadata.
-   No remote is currently configured; no GitHub URL or author is invented.
-3. Choose the license and set accurate package license metadata and the appropriate license text.
-   No license has been chosen or `LICENSE` added. Repository and license metadata **must be set before publishing**.
-4. Manually configure an npm trusted publisher for the actual GitHub owner, repository, and `release.yml`
-   workflow, and ensure package-name/publishing access. The workflow does not provision this trust.
+2. Configure the GitHub remote for the confirmed repository URL; no remote is currently configured.
+3. Perform the user-confirmed **manual initial 0.1.0 publish** locally to bootstrap the npm package,
+   after confirming package-name/publishing access. Keep the package and release-please manifest/tag versions
+   aligned at 0.1.0 for this initial release:
+
+   ```sh
+   npm publish --access public
+   ```
+
+   Prepack builds the package; do not add `--provenance` to this local initial publish.
+4. After the initial publish, manually configure the npm GitHub trusted publisher with owner `Jomik`,
+   repository `pi-repo-scope`, and workflow `release.yml`. This trust is not configured by the workflow
+   and is not yet verified. Future releases use release-please and the OIDC publisher described above.
 
 No consumer integration, migration, push, release, or npm publication has been performed.

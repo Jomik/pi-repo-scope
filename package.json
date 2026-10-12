@@ -2,6 +2,11 @@
   "name": "pi-repo-scope",
   "description": "Synchronous, read-only Git and jj repository scope resolution for shared configuration keys.",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jomik/pi-repo-scope.git"
+  },
   "type": "module",
   "packageManager": "npm@11.12.1",
   "engines": {

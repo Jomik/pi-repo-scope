@@ -12,6 +12,13 @@ describe("standalone package scaffold", () => {
   it("publishes only the built ESM boundary with the resolver API and no runtime dependencies", () => {
     expect(packageJson.name).toBe("pi-repo-scope");
     expect(packageJson.version).toBe("0.1.0");
+    expect(packageJson.license).toBe("MIT");
+    expect(packageJson.repository).toEqual({
+      type: "git",
+      url: "git+https://github.com/Jomik/pi-repo-scope.git",
+    });
+    const license = readFileSync(new URL("../LICENSE", import.meta.url), "utf8");
+    expect(license).toMatch(/^MIT License\n\nCopyright \(c\) 2026 Jonas Damtoft\n/);
     expect(packageJson.type).toBe("module");
     expect(packageJson.exports).toEqual({
       ".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
