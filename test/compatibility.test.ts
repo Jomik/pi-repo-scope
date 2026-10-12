@@ -44,6 +44,45 @@ function environment(root: string): NodeJS.ProcessEnv {
   };
 }
 
+function executableVersion(command: "git" | "jj", output: string): string | undefined {
+  const pattern = command === "git" ? /^git version (\d+\.\d+\.\d+)(?:\s|$)/ : /^jj (\d+\.\d+\.\d+)(?:-[0-9a-f]{40})?$/;
+  return pattern.exec(output)?.[1];
+}
+
+describe("jj release version extraction", () => {
+  it.each([
+    ["jj 0.29.0-94269d2e7228ff502b2116258e5ae6b3b07ec434", "0.29.0"],
+    ["jj 0.46.0-7d382314f9420b4b8d932245b49c99492c812b9f", "0.46.0"],
+    ["jj 0.29.0", "0.29.0"],
+    ["jj 0.46.0", "0.46.0"],
+  ])("extracts the pinned version from %s", (output, version) => {
+    expect(executableVersion("jj", output)).toBe(version);
+  });
+
+  it.each([
+    "jj 0.29.0-nightly",
+    "jj 0.46.0-dirty",
+    "jj 0.46.0-7d382314f9420b4b8d932245b49c99492c812b9f-dirty",
+    "jj 0.46.0 dirty",
+    "jj 0.46.0-",
+    `jj 0.46.0-${"a".repeat(39)}`,
+    `jj 0.46.0-${"a".repeat(41)}`,
+    `jj 0.46.0-${"A".repeat(40)}`,
+    `jj 0.46.0-${"g".repeat(40)}`,
+  ])("rejects non-release output %s", (output) => {
+    expect(executableVersion("jj", output)).toBeUndefined();
+  });
+
+  it.each(["jj 0.45.0", `jj 0.45.0-${"a".repeat(40)}`])(
+    "captures an unpinned version without satisfying the pins: %s",
+    (output) => {
+      const version = executableVersion("jj", output);
+      expect(version).toBe("0.45.0");
+      expect(["0.29.0", "0.46.0"]).not.toContain(version);
+    },
+  );
+});
+
 function executable(command: "git" | "jj", pins: string[], requested?: string) {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), "repo-scope-version-")));
   let version: string | undefined;
@@ -56,8 +95,7 @@ function executable(command: "git" | "jj", pins: string[], requested?: string) {
       timeout,
       maxBuffer,
     }).trim();
-    const prefix = command === "git" ? "git version" : "jj";
-    version = new RegExp(`^${prefix} (\\d+\\.\\d+\\.\\d+)(?:\\s|$)`).exec(output)?.[1];
+    version = executableVersion(command, output);
     if (!version || !pins.includes(version) || (requested !== undefined && version !== requested)) {
       reason = `${command}: got ${JSON.stringify(output)}, expected ${requested ?? pins.join(" or ")}`;
     }

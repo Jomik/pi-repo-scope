@@ -385,7 +385,7 @@ describe("shared jj storage", () => {
   });
 
   it.each(["", "git\n", "git ", "git\0", "git\t", "x".repeat(64 * 1024 + 1), Buffer.from([0xff])])(
-    "rejects malformed type metadata: %s",
+    "rejects malformed type metadata: case %#",
     (value) => {
       const root = repository();
       const repo = jjRepository(root, "simple");
