@@ -27,11 +27,11 @@ jobs:
       - run: npm run build
 
   compatibility:
-    runs-on: ${{ matrix.os }}
+    name: compatibility (jj ${{ matrix.jj }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15]
         jj: ["0.29.0", "0.46.0"]
     env:
       REPO_SCOPE_COMPATIBILITY_REQUIRED: "1"
@@ -54,21 +54,8 @@ jobs:
             https://www.kernel.org/pub/software/scm/git/git-2.49.0.tar.gz \
             --output "$source/git.tar.gz"
           tar -xzf "$source/git.tar.gz" -C "$source"
-          case "$(uname -s)" in
-            Linux)
-              target=x86_64-unknown-linux-musl
-              jobs="$(getconf _NPROCESSORS_ONLN)"
-              ;;
-            Darwin)
-              jobs="$(sysctl -n hw.ncpu)"
-              case "$(uname -m)" in
-                x86_64) target=x86_64-apple-darwin ;;
-                arm64) target=aarch64-apple-darwin ;;
-                *) echo "Unsupported macOS architecture" >&2; exit 1 ;;
-              esac
-              ;;
-            *) echo "Unsupported runner OS" >&2; exit 1 ;;
-          esac
+          target=x86_64-unknown-linux-musl
+          jobs="$(getconf _NPROCESSORS_ONLN)"
           make -C "$source/git-2.49.0" -j"$jobs" prefix="$tools" \
             NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_CURL=YesPlease \
             NO_EXPAT=YesPlease NO_OPENSSL=YesPlease

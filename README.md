@@ -86,7 +86,7 @@ oversized, or undecodable metadata may reject previously accepted Armory layouts
 keys at adoption. The resolver itself provides no fallback or migration of existing config or grants.
 Repository keys and storage paths can change; consumers own any mapping, migration, and authorization policy.
 
-## Development and planned verification
+## Development and verification
 
 Use Node 24 (`.node-version`) and npm 11.12.1 (`packageManager`). Install from the committed lockfile:
 
@@ -99,13 +99,14 @@ npm run build
 ```
 
 The committed `package-lock.json` makes dependency installation reproducible. Local lint, typecheck, and
-build passed; 82 tests passed and 9 pinned Git/jj tests were skipped. CI and the required compatibility
-matrix have not been run.
+build passed; the latest full local suite had 97 tests pass and 9 pinned Git/jj tests skip. CI runs have
+started, but verification of the updated Linux-only CI is pending; no all-green result is claimed.
 
-The prepared CI runs on pushes to `main` and pull requests. Its Ubuntu check uses `npm ci`, lint, typecheck,
-test, and build. A separate **planned, not locally passed** compatibility matrix covers Ubuntu Linux and
-macOS 15, Git 2.49.0, and jj 0.29.0/0.46.0. It builds the pinned Git source from kernel.org without gettext,
-Tcl/Tk, curl, expat, or OpenSSL, and downloads exact tagged jj release archives from the official GitHub project.
+CI runs on pushes to `main` and pull requests. Its Ubuntu check uses `npm ci`, lint, typecheck,
+test, and build. A separate required compatibility matrix covers Ubuntu Linux, Git 2.49.0, and both
+jj 0.29.0 (older released layouts) and 0.46.0 (newer released layouts). It builds the pinned Git source
+from kernel.org without gettext, Tcl/Tk, curl, expat, or OpenSSL, and downloads exact tagged jj release
+archives from the official GitHub project.
 Fixtures use local transport only; Git HTTP transport is unnecessary. Downloads use fixed HTTPS URLs;
 no verified checksums are supplied, so this is version pinning, not cryptographic artifact verification.
 
@@ -125,27 +126,28 @@ REPO_SCOPE_JJ_VERSION=0.46.0 \
 npm test -- test/compatibility.test.ts
 ```
 
-The matrix sets the same required mode with its selected jj version. These matrix targets remain unverified
-until the prepared workflow actually runs successfully.
+The matrix sets the same required mode with its selected jj version. The updated matrix remains pending
+verification until CI completes successfully. macOS remains supported through local/manual full-suite
+and pinned compatibility checks when the required binaries are available; run these checks before releases
+or path-canonicalization changes.
 
 ## Delivery prerequisites
 
-First configure the GitHub repository and remote, then push `main` or open a pull request to run CI.
+The GitHub repository and remote are configured, and pull-request CI runs have started.
 A `main` push also automatically runs the release workflow: release-please v5 opens or updates a release PR
 for the root Node package, starting from manifest version 0.1.0, with minor bumps before 1.0 and no component
 prefix in tags. Opening or updating that PR does not by itself create or publish a release. No manual workflow
-activation is required; neither workflow has been executed or verified yet.
+activation is required. The release workflow has not been executed or verified yet.
 After the manual initial 0.1.0 publish and trusted-publisher setup below, merging a release PR creates a release.
 Only `release_created == 'true'` enables the publisher, which runs `npm ci`, build, and
 `npm publish --provenance --access public` with npm's registry and OIDC permissions.
 The package exports only the resolver ESM entry and its types; the file allowlist is `dist`, and prepack builds it.
 npm includes `README.md` and `LICENSE` automatically. The package is MIT licensed; see [LICENSE](LICENSE).
-The confirmed repository URL is https://github.com/Jomik/pi-repo-scope and is recorded in package metadata;
-this does not verify that the GitHub repository exists or that a remote is configured.
+The repository URL is https://github.com/Jomik/pi-repo-scope and is recorded in package metadata.
 
 Before publishing:
 
-1. Configure the GitHub repository and remote for the confirmed repository URL; no remote is currently configured.
+1. Confirm the GitHub repository and remote still match the repository URL above.
 2. Obtain a successful CI run, including the required pinned compatibility matrix.
 3. Perform the user-confirmed **manual initial 0.1.0 publish** locally to bootstrap the npm package,
    after confirming package-name/publishing access. Keep the package and release-please manifest/tag versions
@@ -162,4 +164,4 @@ Before publishing:
    Complete trusted-publisher setup before merging any automated release PR; a created release triggers
    the publisher, which otherwise fails authentication.
 
-No consumer integration, migration, push, release, or npm publication has been performed.
+No consumer integration, migration, release, or npm publication has been performed.
