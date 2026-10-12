@@ -130,12 +130,13 @@ until the prepared workflow actually runs successfully.
 
 ## Delivery prerequisites
 
-Once the GitHub repository and remote are configured, pushing `main` triggers the prepared CI and release
-workflows automatically; CI also runs on pull requests. No manual workflow activation is required.
-Neither workflow has been executed or verified yet.
-A `main` push runs release-please v5 to open or update a release PR for the root Node package, starting from
-manifest version 0.1.0, with minor bumps before 1.0 and no component prefix in tags. Merging the release PR
-creates a release. Only `release_created == 'true'` enables the publisher, which runs `npm ci`, build, and
+First configure the GitHub repository and remote, then push `main` or open a pull request to run CI.
+A `main` push also automatically runs the release workflow: release-please v5 opens or updates a release PR
+for the root Node package, starting from manifest version 0.1.0, with minor bumps before 1.0 and no component
+prefix in tags. Opening or updating that PR does not by itself create or publish a release. No manual workflow
+activation is required; neither workflow has been executed or verified yet.
+After the manual initial 0.1.0 publish and trusted-publisher setup below, merging a release PR creates a release.
+Only `release_created == 'true'` enables the publisher, which runs `npm ci`, build, and
 `npm publish --provenance --access public` with npm's registry and OIDC permissions.
 The package exports only the resolver ESM entry and its types; the file allowlist is `dist`, and prepack builds it.
 npm includes `README.md` and `LICENSE` automatically. The package is MIT licensed; see [LICENSE](LICENSE).
@@ -144,8 +145,8 @@ this does not verify that the GitHub repository exists or that a remote is confi
 
 Before publishing:
 
-1. Obtain a successful CI run, including the required compatibility matrix.
-2. Configure the GitHub remote for the confirmed repository URL; no remote is currently configured.
+1. Configure the GitHub repository and remote for the confirmed repository URL; no remote is currently configured.
+2. Obtain a successful CI run, including the required pinned compatibility matrix.
 3. Perform the user-confirmed **manual initial 0.1.0 publish** locally to bootstrap the npm package,
    after confirming package-name/publishing access. Keep the package and release-please manifest/tag versions
    aligned at 0.1.0 for this initial release:
