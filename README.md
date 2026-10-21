@@ -159,7 +159,7 @@ Before publishing:
 
    Prepack builds the package; do not add `--provenance` to this local initial publish.
 4. After the initial publish, manually configure the npm GitHub trusted publisher with owner `Jomik`,
-   repository `pi-repo-scope`, and workflow `release.yml`. This trust is not configured by the workflow
+   repository `pi-repo-scope`, and workflow `publish.yml`. This trust is not configured by the workflow
    and is not yet verified. Future releases use release-please and the OIDC publisher described above.
    Complete trusted-publisher setup before merging any automated release PR; a created release triggers
    the publisher, which otherwise fails authentication.
