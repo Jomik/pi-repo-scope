@@ -98,9 +98,9 @@ npm test
 npm run build
 ```
 
-The committed `package-lock.json` makes dependency installation reproducible. Local lint, typecheck, and
-build passed; the latest full local suite had 97 tests pass and 9 pinned Git/jj tests skip. CI runs have
-started, but verification of the updated Linux-only CI is pending; no all-green result is claimed.
+The committed `package-lock.json` makes dependency installation reproducible. Verification includes lint,
+typecheck, build, resolver tests, and pinned Git/jj compatibility tests. Local compatibility fixtures skip
+when the required CLI versions are unavailable; local checks do not establish a passing CI run for a new commit.
 
 CI runs on pushes to `main` and pull requests. Its Ubuntu check uses `npm ci`, lint, typecheck,
 test, and build. A separate required compatibility matrix covers Ubuntu Linux, Git 2.49.0, and both
