@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  compatibility:
+    name: compatibility (jj ${{ matrix.jj }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        jj: ["0.29.0", "0.46.0"]
+    env:
+      REPO_SCOPE_COMPATIBILITY_REQUIRED: "1"
+      REPO_SCOPE_GIT_VERSION: "2.49.0"
+      REPO_SCOPE_JJ_VERSION: ${{ matrix.jj }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - name: Build Git 2.49.0 and install pinned jj
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/repo-scope-tools"
+          source="$RUNNER_TEMP/repo-scope-git-source"
+          mkdir -p "$tools/bin" "$source"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --retry 3 --retry-delay 2 --retry-max-time 60 \
+            https://www.kernel.org/pub/software/scm/git/git-2.49.0.tar.gz \
+            --output "$source/git.tar.gz"
+          tar -xzf "$source/git.tar.gz" -C "$source"
+          target=x86_64-unknown-linux-musl
+          jobs="$(getconf _NPROCESSORS_ONLN)"
+          make -C "$source/git-2.49.0" -j"$jobs" prefix="$tools" \
+            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_CURL=YesPlease \
+            NO_EXPAT=YesPlease NO_OPENSSL=YesPlease
+          make -C "$source/git-2.49.0" install prefix="$tools" \
+            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_CURL=YesPlease \
+            NO_EXPAT=YesPlease NO_OPENSSL=YesPlease
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --retry 3 --retry-delay 2 --retry-max-time 60 \
+            "https://github.com/jj-vcs/jj/releases/download/v${REPO_SCOPE_JJ_VERSION}/jj-v${REPO_SCOPE_JJ_VERSION}-${target}.tar.gz" \
+            --output "$RUNNER_TEMP/jj.tar.gz"
+          tar -xzf "$RUNNER_TEMP/jj.tar.gz" -C "$tools/bin"
+          echo "$tools/bin" >> "$GITHUB_PATH"
+      - run: npm ci
+      # Module-initialization probes throw on missing or mismatched CLI versions.
+      # Fixtures use local transport only; this Git build intentionally lacks HTTP.
+      - run: npm test -- test/compatibility.test.ts
