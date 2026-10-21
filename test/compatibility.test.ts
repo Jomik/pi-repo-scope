@@ -17,15 +17,10 @@ function directory(path: string): string {
 
 function environment(root: string): NodeJS.ProcessEnv {
   // Deliberately do not inherit Git/JJ overrides, user config, or credential helpers.
-  const env: NodeJS.ProcessEnv = {};
-  const platformKeys = process.platform === "win32" ? ["SystemRoot", "WINDIR", "COMSPEC", "PATHEXT"] : [];
-  for (const key of ["PATH", ...platformKeys]) {
-    if (process.env[key] !== undefined) env[key] = process.env[key];
-  }
   const config = join(root, "empty-jj-config.toml");
   fs.writeFileSync(config, "");
   return {
-    ...env,
+    PATH: process.env.PATH,
     LANG: "C",
     LC_ALL: "C",
     HOME: directory(join(root, "home")),
